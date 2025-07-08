@@ -1,0 +1,14 @@
+[workspace]
+members = [ "aspartial", "aspartial_derive"]
+resolver = "2"
+
+[workspace.package]
+version = "0.0.1"
+authors = ["Tomaz Vieira<tom.fogaca@gmail.com>"]
+edition = "2024"
+rust-version="1.88"
+license = "MIT"
+
+[workspace.dependencies]
+serde = "1.0.210"
+serde_json = "1.0.128"
