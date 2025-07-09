@@ -12,6 +12,10 @@ serde_json = ["dep:serde_json"]
 
 [dependencies]
 aspartial_derive = { path = "../aspartial_derive" }
-serde = { workspace = true, optional=true }
+serde = { workspace = true, optional = true, features = ["derive"] }
 serde_json = { workspace = true, optional=true }
+
+[dev-dependencies]
+serde_json.workspace = true
+serde = { workspace = true, features = ["derive"] }
 

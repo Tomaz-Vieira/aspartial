@@ -43,6 +43,8 @@ pub trait AsPartial{
     type Partial: AsPartial;
 }
 
+pub use ::aspartial_derive::AsPartial;
+
 /// Partial types are mostly useful in the context of (de)serialization, to be able
 /// to handle incomplete data in self-describing formats (e.g. JSON, YAML).
 /// For convenience, the AsSerializablePartial is blanket-implemented for all types
@@ -51,32 +53,27 @@ pub trait AsPartial{
 pub trait AsSerializablePartial: AsPartial<Partial: serde::Serialize + serde::de::DeserializeOwned>
 {}
 
+#[cfg(feature = "serde")]
 impl<T> AsSerializablePartial for T
 where T: AsPartial<Partial: serde::Serialize + serde::de::DeserializeOwned>
 {}
 
-impl AsPartial for String{
+macro_rules! impl_AsPartial_as_Self { ( $type:ty ) => {
+    impl AsPartial for $type{
+        type Partial = Self;
+    }
+};}
+
+impl_AsPartial_as_Self!(String);
+impl_AsPartial_as_Self!(usize);
+impl_AsPartial_as_Self!(u32);
+impl_AsPartial_as_Self!(std::num::NonZeroUsize);
+impl_AsPartial_as_Self!(f32);
+impl_AsPartial_as_Self!((f32, f32));
+impl_AsPartial_as_Self!(bool);
+
+impl AsPartial for std::sync::Arc<str>{
     type Partial = String;
-}
-
-impl AsPartial for Arc<str>{
-    type Partial = String;
-}
-
-impl AsPartial for usize {
-    type Partial = usize;
-}
-
-impl AsPartial for NonZeroUsize {
-    type Partial = NonZeroUsize;
-}
-
-impl AsPartial for f32 {
-    type Partial = f32;
-}
-
-impl AsPartial for (f32, f32) {
-    type Partial = (f32, f32);
 }
 
 //FIXME: T::Partial and not Option<T::Partial>??
@@ -91,8 +88,4 @@ impl<T: AsPartial> AsPartial for Vec<T> {
 #[cfg(feature="serde_json")]
 impl AsPartial for serde_json::Map<String, serde_json::Value>{
     type Partial = Self;
-}
-
-impl AsPartial for bool {
-    type Partial = bool;
 }

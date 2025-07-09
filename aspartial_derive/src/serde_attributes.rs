@@ -89,7 +89,9 @@ impl syn::parse::Parse for SerdeEnumTagParams {
 
 pub struct SerdeInnerRenameParams{
     /// `rename` in #[serde(rename = "bla")]
+    #[allow(dead_code)]
     pub rename_marker: syn::Ident,
+    #[allow(dead_code)]
     pub equals_sign: syn::Token![=],
     /// `"bla"` in #[serde(rename = "bla")]
     pub new_name: syn::LitStr,
@@ -122,47 +124,47 @@ impl SerdeInnerRenameParams {
 }
 
 pub enum RenameStyle{
-    Lowercase(syn::LitStr),
-    Uppercase(syn::LitStr),
-    PascalCase(syn::LitStr),
-    CamelCase(syn::LitStr),
-    SnakeCase(syn::LitStr),
-    ScreamingSnakeCase(syn::LitStr),
-    KebabCase(syn::LitStr),
-    ScreamingKebabCase(syn::LitStr),
+    Lowercase,
+    Uppercase,
+    PascalCase,
+    CamelCase,
+    SnakeCase,
+    ScreamingSnakeCase,
+    KebabCase,
+    ScreamingKebabCase,
 }
 
 impl RenameStyle {
     pub fn transform(&self, litstr: &syn::LitStr) -> syn::LitStr {
         let raw = litstr.value();
         let transformed_raw = match self {
-            Self::Lowercase(_) => raw.to_lowercase(),
-            Self::Uppercase(_) => raw.to_uppercase(),
-            Self::PascalCase(_) => heck::AsPascalCase(raw).to_string(),
-            Self::CamelCase(_) => heck::AsLowerCamelCase(raw).to_string(),
-            Self::SnakeCase(_) => heck::AsSnakeCase(raw).to_string(),
-            Self::ScreamingSnakeCase(_) => heck::AsShoutySnakeCase(raw).to_string(),
-            Self::KebabCase(_) => heck::AsKebabCase(raw).to_string(),
-            Self::ScreamingKebabCase(_) => heck::AsShoutyKebabCase(raw).to_string(),
+            Self::Lowercase => raw.to_lowercase(),
+            Self::Uppercase => raw.to_uppercase(),
+            Self::PascalCase => heck::AsPascalCase(raw).to_string(),
+            Self::CamelCase => heck::AsLowerCamelCase(raw).to_string(),
+            Self::SnakeCase => heck::AsSnakeCase(raw).to_string(),
+            Self::ScreamingSnakeCase => heck::AsShoutySnakeCase(raw).to_string(),
+            Self::KebabCase => heck::AsKebabCase(raw).to_string(),
+            Self::ScreamingKebabCase => heck::AsShoutyKebabCase(raw).to_string(),
         };
         syn::LitStr::new(&transformed_raw, litstr.span())
     }
 }
 
-impl TryFrom<syn::LitStr> for RenameStyle {
+impl TryFrom<&syn::LitStr> for RenameStyle {
     type Error = syn::Error;
 
-    fn try_from(litstr: syn::LitStr) -> Result<Self, Self::Error> {
+    fn try_from(litstr: &syn::LitStr) -> Result<Self, Self::Error> {
         let raw = litstr.value();
         Ok(match raw.as_str() {
-            "lowercase" => Self::Lowercase(litstr),
-            "UPPERCASE" => Self::Uppercase(litstr),
-            "PascalCase" => Self::PascalCase(litstr),
-            "camelCase" => Self::CamelCase(litstr),
-            "snake_case" => Self::SnakeCase(litstr),
-            "SCREAMING_SNAKE_CASE" => Self::ScreamingSnakeCase(litstr),
-            "kebab-case" => Self::KebabCase(litstr),
-            "SCREAMING-KEBAB-CASE" => Self::ScreamingSnakeCase(litstr),
+            "lowercase" => Self::Lowercase,
+            "UPPERCASE" => Self::Uppercase,
+            "PascalCase" => Self::PascalCase,
+            "camelCase" => Self::CamelCase,
+            "snake_case" => Self::SnakeCase,
+            "SCREAMING_SNAKE_CASE" => Self::ScreamingSnakeCase,
+            "kebab-case" => Self::KebabCase,
+            "SCREAMING-KEBAB-CASE" => Self::ScreamingKebabCase,
             _ => return Err(syn::Error::new(litstr.span(), "Invalid rename style"))
         })
     }
@@ -170,7 +172,9 @@ impl TryFrom<syn::LitStr> for RenameStyle {
 
 pub struct SerdeOuterRenameParams {
     /// `rename_all` in #[serde(rename_all = "bla")]
+    #[allow(dead_code)]
     pub rename_marker: syn::Ident,
+    #[allow(dead_code)]
     pub equals_sign: syn::Token![=],
     pub rename_style: RenameStyle,
 }
@@ -181,7 +185,7 @@ impl syn::parse::Parse for SerdeOuterRenameParams {
         if key_val.key.to_string() != "rename_all" {
             return Err(syn::Error::new(key_val.key.span(), "Expected key 'rename_all'"))
         }
-        let rename_style = RenameStyle::try_from(key_val.value)?;
+        let rename_style = RenameStyle::try_from(&key_val.value)?;
         Ok(Self{
             rename_marker: key_val.key,
             equals_sign: key_val.equals_token,
