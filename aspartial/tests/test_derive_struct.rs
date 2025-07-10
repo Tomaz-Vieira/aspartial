@@ -1,5 +1,6 @@
 use ::aspartial::AsPartial;
-#[derive(AsPartial, PartialEq, Eq, Debug, serde::Serialize)]
+
+#[derive(AsPartial, serde::Serialize)]
 struct SomeStruct {
     normal_string_field: String,
     #[serde(default = "seven")]
@@ -14,7 +15,6 @@ fn seven() -> u32 {
 
 #[test]
 fn test_derive_simple(){
-
     let raw = serde_json::json!( {} );
     let parsed:  PartialSomeStruct = serde_json::from_value(raw).unwrap();
     assert_eq!(parsed.normal_string_field, None);
