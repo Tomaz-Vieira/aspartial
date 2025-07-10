@@ -32,5 +32,5 @@ fn test_derive_simple(){
     );
     let parsed:  PartialSomeStruct = serde_json::from_value(raw).unwrap();
     assert_eq!(parsed.a, 7);
-    assert_eq!(parsed.b, None);
+    assert_eq!(parsed.b, Some("lala".into()));
 }
