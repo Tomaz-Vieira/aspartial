@@ -1,6 +1,10 @@
 use ::aspartial::AsPartial;
 
 #[derive(AsPartial, serde::Serialize)]
+#[aspartial(name=PartialSomeStruct)]
+#[aspartial(attrs(
+    #[derive(::serde::Serialize, ::serde::Deserialize)]
+))]
 struct SomeStruct {
     normal_string_field: String,
     #[serde(default = "seven")]

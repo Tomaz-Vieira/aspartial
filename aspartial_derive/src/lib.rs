@@ -7,11 +7,12 @@ use proc_macro::TokenStream;
 mod syn_extensions;
 mod as_partial;
 mod serde_attributes;
+mod derive_config;
 mod util;
 
 ////////////////////////////////////////////
 
-#[proc_macro_derive(AsPartial)]
+#[proc_macro_derive(AsPartial, attributes(aspartial))]
 pub fn derive_as_partial(input: TokenStream) -> TokenStream {
     match as_partial::do_derive_as_partial(input) {
         Ok(tokens) => tokens,

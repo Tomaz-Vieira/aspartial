@@ -3,6 +3,7 @@ use quote::{quote, format_ident};
 use syn::{parse_quote, parse_quote_spanned, spanned::Spanned};
 use proc_macro::TokenStream;
 
+use crate::derive_config::ConfigsForAsPartial;
 use crate::syn_extensions::{IAttrExt, IEnumExt, IVariantExt};
 use crate::serde_attributes::SerdeEnumTagParams;
 
@@ -20,7 +21,7 @@ fn where_clause_for_partial<'f>(
     for field_ty in field_types.into_iter() {
         let span = field_ty.span();
         wc.predicates.push_value(parse_quote_spanned!{ span=>
-            #field_ty: ::aspartial::AsSerializablePartial<Partial: std::clone::Clone + std::fmt::Debug>
+            #field_ty: ::aspartial::AsPartial
         });
         wc.predicates.push_punct(comma);
     }
@@ -28,6 +29,7 @@ fn where_clause_for_partial<'f>(
 }
 
 pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
+    let confs = ConfigsForAsPartial::from_attrs(&input.attrs)?;
     let global_rename_params = SerdeEnumTagParams::from_attributes(&input.attrs);
 
     let (partial_struct_field_idents, variant_tags): (Vec<syn::Ident>, Vec<syn::LitStr>) = input.tagged_variants()
@@ -43,7 +45,7 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
         match tag.as_str(){
             #(#variant_tags => Self{
                 #partial_struct_field_idents: ::serde_json::from_value(value.clone()).ok(),
-                .. #empty_partial,
+                .. #empty_partial
             }),*
             _ => #empty_partial
         }
@@ -54,9 +56,10 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
             #(if let Some(payload) = value.get(#variant_tags) {
                 break 'from_outer_tagged Self{
                     #partial_struct_field_idents: ::serde_json::from_value(payload.clone()).ok(),
-                    .. empty,
+                    .. empty
                 }
             })*
+            break 'from_outer_tagged #partial_from_value
         }}
     };
 
@@ -92,7 +95,8 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
         }
     };
 
-    let partial_type_ident = format_ident!("Partial{}", input.ident);
+    let partial_type_ident = &confs.partial_type_ident;
+    let partial_type_attrs = confs.attrs;
     let partial_struct_fields: Vec<syn::Field> = input.variants.iter()
         .map(|v| v.as_partial_field())
         .collect::<syn::Result<_>>()?;
@@ -110,7 +114,13 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
             type Partial = #partial_type_ident #impl_generics;
         }
 
-        #[derive(Clone, Debug, ::serde::Deserialize)]
+        impl #impl_generics ::aspartial::AsPartial for #partial_type_ident #ty_generics
+            #where_clause
+        {
+            type Partial = #partial_type_ident #impl_generics;
+        }
+
+        #(#partial_type_attrs)*
         #[serde(try_from = "::serde_json::Value")]
         pub struct #partial_type_ident #impl_generics
             #where_clause
@@ -119,22 +129,21 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
         }
 
         impl<#impl_generics> TryFrom<::serde_json::Value> for #partial_type_ident {
+            type Error = ::serde_json::Error;
             #fn_tryFrom
         }
     };};
-    // std::fs::write(format!("/tmp/expanded_for{}.rs", partial_type_ident), expanded.to_string() ).unwrap();
+    std::fs::write(format!("/tmp/expanded_for{}.rs", partial_type_ident), expanded.to_string() ).unwrap();
     Ok(proc_macro::TokenStream::from(expanded))
 }
 
 pub fn make_partial_struct(input: &syn::ItemStruct) -> syn::Result<TokenStream>{
+    let confs = ConfigsForAsPartial::from_attrs(&input.attrs)?;
     let struct_name = &input.ident;
     let partial_struct = {
         let mut partial_struct = input.clone();
-        partial_struct.ident = format_ident!("Partial{struct_name}");
-        partial_struct.attrs = vec![
-            parse_quote!(#[derive(::serde::Serialize, ::serde::Deserialize)]),
-            parse_quote!(#[serde(bound = "")]),
-        ];
+        partial_struct.ident = confs.partial_type_ident;
+        partial_struct.attrs = confs.attrs;
         for field in partial_struct.fields.iter_mut() {
             field.attrs.retain(|attr| attr.is_serde_attr());
             field.vis = parse_quote!(pub);
@@ -161,7 +170,6 @@ pub fn make_partial_struct(input: &syn::ItemStruct) -> syn::Result<TokenStream>{
             type Partial = Self;
         }
 
-        #[derive(Clone, Debug)]
         #partial_struct
     };
 
