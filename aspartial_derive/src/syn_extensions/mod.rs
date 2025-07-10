@@ -53,7 +53,7 @@ impl IVariantExt for syn::Variant {
         };
         let ident = self.partial_field_name();
         let field_type: syn::Type = parse_quote!{
-            Option<  <#unnamed_fields as ::bioimg_spec::util::AsPartial>::Partial  >
+            Option<  <#unnamed_fields as ::aspartial::AsPartial>::Partial  >
         };
         Ok(parse_quote!(#ident : #field_type))
     }

@@ -20,7 +20,7 @@ fn where_clause_for_partial<'f>(
     for field_ty in field_types.into_iter() {
         let span = field_ty.span();
         wc.predicates.push_value(parse_quote_spanned!{ span=>
-            #field_ty: ::aspartial::util::AsSerializablePartial<Partial: std::clone::Clone + std::fmt::Debug>
+            #field_ty: ::aspartial::AsSerializablePartial<Partial: std::clone::Clone + std::fmt::Debug>
         });
         wc.predicates.push_punct(comma);
     }
@@ -92,7 +92,7 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
         }
     };
 
-    let partial_enum_ident = format_ident!("Partial{}", input.ident);
+    let partial_type_ident = format_ident!("Partial{}", input.ident);
     let partial_struct_fields: Vec<syn::Field> = input.variants.iter()
         .map(|v| v.as_partial_field())
         .collect::<syn::Result<_>>()?;
@@ -107,21 +107,22 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
         impl #impl_generics ::aspartial::AsPartial for #enum_ident #ty_generics
             #where_clause
         {
-            type Partial = #partial_enum_ident #impl_generics;
+            type Partial = #partial_type_ident #impl_generics;
         }
 
         #[derive(Clone, Debug, ::serde::Deserialize)]
         #[serde(try_from = "::serde_json::Value")]
-        pub struct #partial_enum_ident #impl_generics
+        pub struct #partial_type_ident #impl_generics
             #where_clause
         {
             #(#partial_struct_fields),*
         }
 
-        impl<#impl_generics> TryFrom<::serde_json::Value> for $partial_struct_ident {
+        impl<#impl_generics> TryFrom<::serde_json::Value> for #partial_type_ident {
             #fn_tryFrom
         }
-    }};
+    };};
+    // std::fs::write(format!("/tmp/expanded_for{}.rs", partial_type_ident), expanded.to_string() ).unwrap();
     Ok(proc_macro::TokenStream::from(expanded))
 }
 
