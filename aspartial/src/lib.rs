@@ -1,37 +1,45 @@
-/// Types that represent some structure in a serialized payload can implement
+/// Types that represent some type in a serialized payload can implement
 /// AsPartial to specify what that structure would look like when incomplete.
-/// Usually, for a struct of the form
+/// 
 /// ```rust
+/// use ::aspartial::AsPartial;
+/// 
+/// // A struct like this...
 /// struct MyStruct{
 ///   field1: Something,
-///   field2: SomethingElse,
+///   field2: String,
 /// }
-/// ```
-/// a partial version of it would be of the form
-/// ```rust
+///
+/// // ...would have a 'partial' representation like this, usually generated
+/// // via #[derive(AsPartial)].
 /// struct PartialMyStruct{
 ///   field1: Option<<Something as AsPartial>::Partial>,
-///   field2: Option<<Something as AsPartial>::Partial>,
+///   field2: Option<<String as AsPartial>::Partial>,
 /// }
-/// ```
 ///
-///which expresses some data that has the same structure as MyStruct but
-/// maybe have some (or all) of its (arbitrarily nested) fields missing.
-///
-/// For enums, an enum like
-/// ```rust
+/// // And an enum like this...
 /// enum MyEnum{
-///   Something(Someting),
-///   SomethingElse(SomethingElse),
+///   Something(Something),
+///   SomethingElse(String),
 /// }
-/// ```
-/// has a partial representaiton like this
-/// ```rust
-/// enum PartialMyEnum{
+///
+/// // ...would have a 'partial' representation like this, also usually
+/// // auto-generated via #[derive(AsPartial)]
+/// struct PartialMyEnum{
 ///   something: Option< <Something as AsPartial>::Partial >,
-///   something_else: Option< <SomethingElse as AsPartial>::Partial >,
+///   something_else: Option< <String as AsPartial>::Partial >,
+/// }
+///
+/// 
+/// // Note that each field in in the original MyStruct and every variant in
+/// // the original MyEnum must also implement AsPartial:
+/// #[derive(AsPartial)]
+/// struct Something{
+///   a: u32
 /// }
 /// ```
+///
+///
 ///
 /// that is, the partial version of an enum doesn't really know which variant
 /// it represents, (in fact, all variants could have identical fields), so it is
