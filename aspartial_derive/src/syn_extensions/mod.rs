@@ -1,10 +1,11 @@
 use syn::{parse_quote, spanned::Spanned};
 
-use crate::serde_attributes::{SerdeDefaultAttrParams, SerdeInnerRenameParams, SerdeOuterRenameParams};
+use crate::{serde_attributes::{SerdeDefaultAttrParams, SerdeInnerRenameParams, SerdeOuterRenameParams}, util::KeyEqualsLitStr};
 
 pub trait IAttrExt{
     fn is_serde_attr(&self) -> bool;
     fn is_serde_default(&self) -> bool;
+    fn is__serde__try_from__json_value(&self) -> bool;
 }
 
 impl IAttrExt for syn::Attribute{
@@ -28,6 +29,25 @@ impl IAttrExt for syn::Attribute{
             Ok(_) => true,
             Err(_) => false,
         }
+    }
+    fn is__serde__try_from__json_value(&self) -> bool {
+        if !self.is_serde_attr(){
+            return false
+        }
+        if matches!(self.style, syn::AttrStyle::Inner(_)){
+            return false;
+        }
+        let syn::Meta::List(meta_list) = &self.meta else {
+            return false;
+        };
+        let Ok(KeyEqualsLitStr { key, value, .. }) = meta_list.parse_args::<KeyEqualsLitStr>() else {
+            return false
+        };
+        if key.to_string() != "try_from" {
+            return false
+        }
+
+        return value.value() == "::serde_json::Value" || value.value() == "serde_json::Value"
     }
 }
 

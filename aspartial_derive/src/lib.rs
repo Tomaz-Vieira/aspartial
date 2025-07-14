@@ -12,6 +12,15 @@ mod util;
 
 ////////////////////////////////////////////
 
+/// Generates a 'partial' version of the annotated type and implenets AsPartial
+/// for the annotated type.
+///
+/// # Attributes
+/// ## `aspartial(name = MyPartial)`
+/// Required. Determines the name of the generated partial type.
+///
+/// ## `aspartial(attrs(#[some_attr1] #[some_attr2]))`
+/// Optional. Appends the specified attributes to the generated partial struct
 #[proc_macro_derive(AsPartial, attributes(aspartial))]
 pub fn derive_as_partial(input: TokenStream) -> TokenStream {
     match as_partial::do_derive_as_partial(input) {

@@ -1,5 +1,5 @@
 use proc_macro2::Span;
-use quote::{quote, format_ident};
+use quote::quote;
 use syn::{parse_quote, parse_quote_spanned, spanned::Spanned};
 use proc_macro::TokenStream;
 
@@ -30,6 +30,16 @@ fn where_clause_for_partial<'f>(
 
 pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
     let confs = ConfigsForAsPartial::from_attrs(&input.attrs)?;
+
+    if let Some(from_json_val) = &confs.derive_from_json_value {
+        if !confs.attrs.iter().any(|attr| attr.is__serde__try_from__json_value()) {
+            return Err(syn::Error::new(
+                from_json_val.derive_key.span(),
+                "auto deriving TryFrom<::serde_json::Value> needs #[serde(try_from='::serde_json::Value')]"
+            ))
+        }
+    }
+
     let global_rename_params = SerdeEnumTagParams::from_attributes(&input.attrs);
 
     let (partial_struct_field_idents, variant_tags): (Vec<syn::Ident>, Vec<syn::LitStr>) = input.tagged_variants()
@@ -63,38 +73,6 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
         }}
     };
 
-    let fn_tryFrom = match global_rename_params{
-        SerdeEnumTagParams::Untagged => quote!{
-            fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
-                Ok(#partial_from_value)
-            }
-        },
-        SerdeEnumTagParams::InternallyTagged { tag_key } => quote!{
-            fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
-                let tag = match value.get(#tag_key) {
-                    Some(::serde_json::Value::String(tag)) => tag,
-                    _ => return Ok(#partial_from_value),
-                };
-                Ok(#partial_from_tag)
-            }
-        },
-        SerdeEnumTagParams::AdjacentlyTagged { tag_key, content_key } => quote!{
-            fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
-                let value = value.get(#content_key).unwrap_or(value.clone());
-                let tag = match value.get(#tag_key) {
-                    Some(::serde_json::Value::String(tag)) => tag,
-                    _ => return Ok(#partial_from_value),
-                };
-                Ok(#partial_from_tag)
-            }
-        },
-        SerdeEnumTagParams::ExternallyTagged => quote! {
-            fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
-                Ok(#partial_from_outer_tagged)
-            }
-        }
-    };
-
     let partial_type_ident = &confs.partial_type_ident;
     let partial_type_attrs = confs.attrs;
     let partial_struct_fields: Vec<syn::Field> = input.variants.iter()
@@ -107,7 +85,51 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
     let where_clause = where_clause_for_partial(input.generics.where_clause.clone(), field_types);
     let enum_ident = &input.ident;
 
-    let expanded = quote!{const _: () = {
+    let impl__TryFrom__json_value = confs.derive_from_json_value.is_some().then_some(match global_rename_params{
+        SerdeEnumTagParams::Untagged => quote!{
+            impl<#impl_generics> TryFrom<::serde_json::Value> for #partial_type_ident {
+                type Error = ::serde_json::Error;
+                fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
+                    Ok(#partial_from_value)
+                }
+            }
+        },
+        SerdeEnumTagParams::InternallyTagged { tag_key } => quote!{
+            impl<#impl_generics> TryFrom<::serde_json::Value> for #partial_type_ident {
+                type Error = ::serde_json::Error;
+                fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
+                    let tag = match value.get(#tag_key) {
+                        Some(::serde_json::Value::String(tag)) => tag,
+                        _ => return Ok(#partial_from_value),
+                    };
+                    Ok(#partial_from_tag)
+                }
+            }
+        },
+        SerdeEnumTagParams::AdjacentlyTagged { tag_key, content_key } => quote!{
+            impl<#impl_generics> TryFrom<::serde_json::Value> for #partial_type_ident {
+                type Error = ::serde_json::Error;
+                fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
+                    let value = value.get(#content_key).unwrap_or(value.clone());
+                    let tag = match value.get(#tag_key) {
+                        Some(::serde_json::Value::String(tag)) => tag,
+                        _ => return Ok(#partial_from_value),
+                    };
+                    Ok(#partial_from_tag)
+                }
+            }
+        },
+        SerdeEnumTagParams::ExternallyTagged => quote! {
+            impl<#impl_generics> TryFrom<::serde_json::Value> for #partial_type_ident {
+                type Error = ::serde_json::Error;
+                fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
+                    Ok(#partial_from_outer_tagged)
+                }
+            }
+        }
+    });
+
+    let expanded = quote!{
         impl #impl_generics ::aspartial::AsPartial for #enum_ident #ty_generics
             #where_clause
         {
@@ -121,35 +143,45 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
         }
 
         #(#partial_type_attrs)*
-        #[serde(try_from = "::serde_json::Value")]
         pub struct #partial_type_ident #impl_generics
             #where_clause
         {
             #(#partial_struct_fields),*
         }
 
-        impl<#impl_generics> TryFrom<::serde_json::Value> for #partial_type_ident {
-            type Error = ::serde_json::Error;
-            #fn_tryFrom
-        }
-    };};
-    std::fs::write(format!("/tmp/expanded_for{}.rs", partial_type_ident), expanded.to_string() ).unwrap();
+        #impl__TryFrom__json_value
+    };
     Ok(proc_macro::TokenStream::from(expanded))
 }
 
 pub fn make_partial_struct(input: &syn::ItemStruct) -> syn::Result<TokenStream>{
     let confs = ConfigsForAsPartial::from_attrs(&input.attrs)?;
+
+    if let Some(from_json_val) = &confs.derive_from_json_value {
+        return Err(syn::Error::new(
+            from_json_val.derive_key.span(),
+            "auto deriving TryFrom<::serde_json::Value> only makes sense for enums"
+        ))
+    }
+
     let struct_name = &input.ident;
     let partial_struct = {
         let mut partial_struct = input.clone();
         partial_struct.ident = confs.partial_type_ident;
         partial_struct.attrs = confs.attrs;
         for field in partial_struct.fields.iter_mut() {
-            field.attrs.retain(|attr| attr.is_serde_attr());
+            let has_default = field.attrs.iter().any(|attr| attr.is_serde_default());
+            if cfg!(feature="serde"){
+                field.attrs.retain(|attr| attr.is_serde_attr());
+            } else {
+                field.attrs = vec![];
+            }
             field.vis = parse_quote!(pub);
-            if !field.attrs.iter().any(|a| a.is_serde_default()){
+            if !has_default{
                 let field_ty = &field.ty;
-                field.attrs.push(parse_quote!(#[serde(default)]));
+                if cfg!(feature="serde"){
+                    field.attrs.push(parse_quote!(#[serde(default)]));
+                }
                 field.ty = parse_quote!(Option< <#field_ty as ::aspartial::AsPartial>::Partial >);
             }
         }
@@ -172,7 +204,6 @@ pub fn make_partial_struct(input: &syn::ItemStruct) -> syn::Result<TokenStream>{
 
         #partial_struct
     };
-
     Ok(proc_macro::TokenStream::from(expanded))
 }
 

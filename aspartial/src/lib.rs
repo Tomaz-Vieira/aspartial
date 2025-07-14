@@ -31,9 +31,13 @@
 /// }
 ///
 /// 
-/// // Note that each field in in the original MyStruct and every variant in
-/// // the original MyEnum must also implement AsPartial:
+/// // Note that each field type in in the original MyStruct and every variant
+/// // in the original MyEnum must also implement AsPartial:
 /// #[derive(AsPartial)]
+/// #[aspartial(name = PartialSomething)]
+/// #[aspartial(attrs(
+///     #[derive(::serde::Serialize)]
+/// ))]
 /// struct Something{
 ///   a: u32
 /// }
