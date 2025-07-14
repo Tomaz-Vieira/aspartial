@@ -31,6 +31,7 @@ fn test_derive_enum(){
         }
     );
     let parsed: PartialSomeEnum = serde_json::from_value(raw).unwrap();
-    let expected = PartialSomeStruct{a: Some(1234), b: Some("some string".to_owned())};
-    assert_eq!(parsed.struct_variant, Some(expected));
+    let expected_struct_variant = PartialSomeStruct{a: Some(1234), b: Some("some string".to_owned())};
+    assert_eq!(parsed.struct_variant, Some(expected_struct_variant));
+    assert_eq!(parsed.string_variant, None);
 }
