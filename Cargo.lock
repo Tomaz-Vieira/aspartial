@@ -6,6 +6,7 @@ version = 4
 name = "aspartial"
 version = "0.0.1"
 dependencies = [
+ "aspartial",
  "aspartial_derive",
  "serde",
  "serde_json",
