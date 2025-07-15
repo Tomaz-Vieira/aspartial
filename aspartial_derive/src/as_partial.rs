@@ -94,7 +94,7 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
 
     let impl__TryFrom__json_value = cfg!(feature="serde").then_some(match enum_tag_style{
         SerdeEnumTagParams::Untagged => quote!{
-            impl #impl_generics TryFrom<::serde_json::Value> for #partial_type_ident #ty_generics {
+            impl #impl_generics TryFrom<::serde_json::Value> for #partial_type_ident #ty_generics #where_clause {
                 type Error = ::serde_json::Error;
                 fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
                     Ok(#partial_from_value)
@@ -102,7 +102,7 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
             }
         },
         SerdeEnumTagParams::InternallyTagged { tag_key } => quote!{
-            impl #impl_generics TryFrom<::serde_json::Value> for #partial_type_ident #ty_generics {
+            impl #impl_generics TryFrom<::serde_json::Value> for #partial_type_ident #ty_generics #where_clause {
                 type Error = ::serde_json::Error;
                 fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
                     let tag = match value.get(#tag_key) {
@@ -114,7 +114,7 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
             }
         },
         SerdeEnumTagParams::AdjacentlyTagged { tag_key, content_key } => quote!{
-            impl #impl_generics TryFrom<::serde_json::Value> for #partial_type_ident #ty_generics {
+            impl #impl_generics TryFrom<::serde_json::Value> for #partial_type_ident #ty_generics #where_clause {
                 type Error = ::serde_json::Error;
                 fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
                     let orig_val = &value;
@@ -130,7 +130,7 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
             }
         },
         SerdeEnumTagParams::ExternallyTagged => quote! {
-            impl #impl_generics TryFrom<::serde_json::Value> for #partial_type_ident #ty_generics {
+            impl #impl_generics TryFrom<::serde_json::Value> for #partial_type_ident #ty_generics #where_clause {
                 type Error = ::serde_json::Error;
                 fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
                     Ok(#partial_from_outer_tagged)
