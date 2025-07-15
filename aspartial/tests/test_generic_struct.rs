@@ -22,7 +22,7 @@ where
     R: Borrow<str>
 {
     pub generic_field: R,
-    pub string_field: Option<String>,
+    pub string_field: String,
 }
 
 #[test]
@@ -33,11 +33,9 @@ fn test_generic_structs(){
                 "a": 123,
                 "b": "lele"
             },
-            "string_field": "lalala"
         }
     );
     let parsed:  PartialMyGeneric<Something> = serde_json::from_value(raw).unwrap();
     assert_eq!(parsed.generic_field, Some(PartialSomething{b: Some("lele".to_owned())}));
-    // assert_eq!(parsed.defaults_to_7, 7);
-    // assert_eq!(parsed.defaults_to_default, <bool as Default>::default());
+    assert_eq!(parsed.string_field, None);
 }
