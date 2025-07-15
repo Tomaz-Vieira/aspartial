@@ -7,9 +7,9 @@ use crate::derive_config::ConfigsForAsPartial;
 use crate::syn_extensions::{IAttrExt, IEnumExt, IVariantExt};
 use crate::serde_attributes::SerdeEnumTagParams;
 
-fn where_clause_for_partial<'f>(
+fn where_clause_for_partial<'field>(
     original_where: Option<syn::WhereClause>,
-    field_types: impl IntoIterator<Item=&'f syn::Type>,
+    fields: impl IntoIterator<Item=&'field syn::Field>,
 ) ->syn::WhereClause {
     let mut wc = original_where.unwrap_or(parse_quote!(where));
 
@@ -18,12 +18,19 @@ fn where_clause_for_partial<'f>(
         wc.predicates.push_punct(comma);
     }
 
-    for field_ty in field_types.into_iter() {
-        let span = field_ty.span();
-        wc.predicates.push_value(parse_quote_spanned!{ span=>
-            #field_ty: ::aspartial::AsPartial
+    for field in fields.into_iter() {
+        let span = field.ty.span();
+        let field_ty = &field.ty;
+        wc.predicates.push_value( match cfg!(feature="serde") {
+            true => parse_quote_spanned!{ span=> #field_ty : ::aspartial::AsPartial<Partial: ::serde::de::DeserializeOwned> },
+            false => parse_quote_spanned!{ span=> #field_ty: ::aspartial::AsPartial },
         });
         wc.predicates.push_punct(comma);
+        if field.attrs.iter().any(|attr| attr.is_serde_regular_default()) {
+            let default_pred: syn::WherePredicate = parse_quote!(#field_ty: std::default::Default);
+            wc.predicates.push_value(default_pred);
+            wc.predicates.push_punct(comma);
+        }
     }
     wc
 }
@@ -31,16 +38,16 @@ fn where_clause_for_partial<'f>(
 pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
     let confs = ConfigsForAsPartial::from_attrs(&input.attrs)?;
 
-    if let Some(from_json_val) = &confs.derive_from_json_value {
-        if !confs.attrs.iter().any(|attr| attr.is__serde__try_from__json_value()) {
-            return Err(syn::Error::new(
-                from_json_val.derive_key.span(),
-                "auto deriving TryFrom<::serde_json::Value> needs #[serde(try_from='::serde_json::Value')]"
-            ))
-        }
-    }
+    // if let Some(from_json_val) = &confs.derive_from_json_value {
+    //     if !confs.attrs.iter().any(|attr| attr.is__serde__try_from__json_value()) {
+    //         return Err(syn::Error::new(
+    //             from_json_val.derive_key.span(),
+    //             "auto deriving TryFrom<::serde_json::Value> needs #[serde(try_from='::serde_json::Value')]"
+    //         ))
+    //     }
+    // }
 
-    let global_rename_params = SerdeEnumTagParams::from_attributes(&input.attrs);
+    let enum_tag_style = SerdeEnumTagParams::from_attributes(&input.attrs);
 
     let (partial_struct_field_idents, variant_tags): (Vec<syn::Ident>, Vec<syn::LitStr>) = input.tagged_variants()
         .map(|(tag, v)| (v.partial_field_name(), tag))
@@ -56,7 +63,7 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
             #(#variant_tags => Self{
                 #partial_struct_field_idents: ::serde_json::from_value(value.clone()).ok(),
                 .. #empty_partial
-            }),*
+            },)*
             _ => #empty_partial
         }
     };
@@ -79,13 +86,13 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
         .map(|v| v.as_partial_field())
         .collect::<syn::Result<_>>()?;
     let (impl_generics, ty_generics, _) = input.generics.split_for_impl();
-    let field_types = input.variants.iter()
-        .map(|v| v.field_types())
+    let fields = input.variants.iter()
+        .map(|v| v.fields())
         .flatten();
-    let where_clause = where_clause_for_partial(input.generics.where_clause.clone(), field_types);
+    let where_clause = where_clause_for_partial(input.generics.where_clause.clone(), fields);
     let enum_ident = &input.ident;
 
-    let impl__TryFrom__json_value = confs.derive_from_json_value.is_some().then_some(match global_rename_params{
+    let impl__TryFrom__json_value = cfg!(feature="serde").then_some(match enum_tag_style{
         SerdeEnumTagParams::Untagged => quote!{
             impl<#impl_generics> TryFrom<::serde_json::Value> for #partial_type_ident {
                 type Error = ::serde_json::Error;
@@ -128,6 +135,11 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
             }
         }
     });
+    let partial_derive_deserialize = cfg!(feature="serde").then_some(quote!(
+        #[derive(::serde::Deserialize)]
+        #[serde(bound = "")]
+        #[serde(try_from="::serde_json::Value")]
+    ));
 
     let expanded = quote!{
         impl #impl_generics ::aspartial::AsPartial for #enum_ident #ty_generics
@@ -142,6 +154,7 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
             type Partial = #partial_type_ident #impl_generics;
         }
 
+        #partial_derive_deserialize
         #(#partial_type_attrs)*
         pub struct #partial_type_ident #impl_generics
             #where_clause
@@ -157,38 +170,42 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
 pub fn make_partial_struct(input: &syn::ItemStruct) -> syn::Result<TokenStream>{
     let confs = ConfigsForAsPartial::from_attrs(&input.attrs)?;
 
-    if let Some(from_json_val) = &confs.derive_from_json_value {
-        return Err(syn::Error::new(
-            from_json_val.derive_key.span(),
-            "auto deriving TryFrom<::serde_json::Value> only makes sense for enums"
-        ))
-    }
+    let (impl_generics, ty_generics, _) = input.generics.split_for_impl();
+    let where_clause = where_clause_for_partial(
+        input.generics.where_clause.clone(),
+        input.fields.iter()
+    );
 
-    let struct_name = &input.ident;
     let partial_struct = {
         let mut partial_struct = input.clone();
         partial_struct.ident = confs.partial_type_ident;
         partial_struct.attrs = confs.attrs;
+        if cfg!(feature="serde") {
+            partial_struct.attrs.push( parse_quote!( #[derive(::serde::Deserialize)] ));
+            partial_struct.attrs.push( parse_quote!( #[serde(bound = "")] ));
+        }
+        partial_struct.generics.where_clause = Some(where_clause.clone());
+
         for field in partial_struct.fields.iter_mut() {
-            let has_default = field.attrs.iter().any(|attr| attr.is_serde_default());
-            if cfg!(feature="serde"){
+            field.vis = parse_quote!(pub);
+            if cfg!(feature="serde") {
                 field.attrs.retain(|attr| attr.is_serde_attr());
+                let is_default_field = field.attrs.iter().any(|attr| attr.is_serde_any_default());
+                if !is_default_field{ //fields with #[serde(default)] don't need to have type Option<_>
+                    let field_ty = &field.ty;
+                    field.attrs.push(parse_quote!(#[serde(default)]));
+                    field.ty = parse_quote!(Option< <#field_ty as ::aspartial::AsPartial>::Partial >);
+                }
             } else {
                 field.attrs = vec![];
-            }
-            field.vis = parse_quote!(pub);
-            if !has_default{
                 let field_ty = &field.ty;
-                if cfg!(feature="serde"){
-                    field.attrs.push(parse_quote!(#[serde(default)]));
-                }
                 field.ty = parse_quote!(Option< <#field_ty as ::aspartial::AsPartial>::Partial >);
             }
         }
         partial_struct
     };
+    let struct_name = &input.ident;
     let partial_struct_name = &partial_struct.ident;
-    let (impl_generics, ty_generics, where_clause) = partial_struct.generics.split_for_impl();
     let expanded = quote! {
         impl #impl_generics ::aspartial::AsPartial for #struct_name #ty_generics
             #where_clause

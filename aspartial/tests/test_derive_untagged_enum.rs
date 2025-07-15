@@ -1,22 +1,21 @@
 
 use ::aspartial::AsPartial;
 
+#[allow(dead_code)]
 #[derive(AsPartial)]
 #[aspartial(name = PartialSomeStruct)]
-#[aspartial(attrs( #[derive(PartialEq, Eq, Debug, ::serde::Deserialize)] ))]
-#[allow(dead_code)]
+#[aspartial(attrs( #[derive(PartialEq, Eq, Debug)] ))]
+#[derive(::serde::Deserialize)]
 struct SomeStruct {
     a: u32,
     b: String,
 }
 
+#[allow(dead_code)]
 #[derive(AsPartial)]
 #[aspartial(name = PartialSomeEnum)]
-#[aspartial(attrs( #[derive(::serde::Deserialize)] ))]
-#[aspartial(attrs( #[serde(try_from="::serde_json::Value")] ))]
-#[aspartial(attrs( #[serde(tag = "untagged")] ))]
-#[aspartial(derive(TryFrom<::serde_json::Value>))]
-#[allow(dead_code)]
+#[derive(::serde::Deserialize)]
+#[serde(tag = "untagged")]
 enum SomeEnum {
     StringVariant(String),
     StructVariant(SomeStruct)

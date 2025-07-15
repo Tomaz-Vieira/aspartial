@@ -1,9 +1,10 @@
 use ::aspartial::AsPartial;
 
+#[allow(dead_code)]
 #[derive(AsPartial)]
 #[aspartial(name = PartialSomeStruct)]
-#[aspartial(attrs( #[derive(PartialEq, Eq, Debug, ::serde::Deserialize)] ))]
-#[allow(dead_code)]
+#[aspartial(attrs( #[derive(PartialEq, Eq, Debug)] ))]
+#[derive(serde::Deserialize)]
 struct SomeStruct {
     a: u32,
     b: String,
@@ -11,10 +12,10 @@ struct SomeStruct {
 
 #[derive(AsPartial)]
 #[aspartial(name = PartialSomeEnum)]
-#[aspartial(attrs( #[derive(::serde::Deserialize)] ))]
-#[aspartial(attrs( #[serde(try_from="::serde_json::Value")] ))]
-#[aspartial(attrs( #[serde(tag = "variant_tag")] ))]
-#[aspartial(derive(TryFrom<::serde_json::Value>))]
+
+#[derive(::serde::Deserialize)]
+#[serde(tag = "variant_tag")]
+
 #[allow(dead_code)]
 enum SomeEnum {
     StringVariant(String),

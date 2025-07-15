@@ -1,11 +1,12 @@
 use syn::{parse_quote, spanned::Spanned};
 
-use crate::{serde_attributes::{SerdeDefaultAttrParams, SerdeInnerRenameParams, SerdeOuterRenameParams}, util::KeyEqualsLitStr};
+use crate::{serde_attributes::{SerdeInnerRenameParams, SerdeOuterRenameParams}, util::KeyEqualsLitStr};
 
 pub trait IAttrExt{
     fn is_serde_attr(&self) -> bool;
-    fn is_serde_default(&self) -> bool;
-    fn is__serde__try_from__json_value(&self) -> bool;
+    fn is_serde_any_default(&self) -> bool;
+    fn is_serde_regular_default(&self) -> bool;
+    fn is_serde_default_to_func(&self) -> bool;
 }
 
 impl IAttrExt for syn::Attribute{
@@ -15,7 +16,10 @@ impl IAttrExt for syn::Attribute{
         };
         return last_segment.ident.to_string() == "serde"
     }
-    fn is_serde_default(&self) -> bool {
+    fn is_serde_any_default(&self) ->bool {
+        self.is_serde_regular_default() || self.is_serde_default_to_func()
+    }
+    fn is_serde_regular_default(&self) -> bool {
         if !self.is_serde_attr() {
             return false
         }
@@ -25,13 +29,13 @@ impl IAttrExt for syn::Attribute{
         let syn::Meta::List(meta_list) = &self.meta else {
             return false;
         };
-        match meta_list.parse_args::<SerdeDefaultAttrParams>() {
-            Ok(_) => true,
-            Err(_) => false,
-        }
+        let Ok(default_token) = meta_list.parse_args::<syn::Ident>() else {
+            return false
+        };
+        return default_token.to_string() == "default"
     }
-    fn is__serde__try_from__json_value(&self) -> bool {
-        if !self.is_serde_attr(){
+    fn is_serde_default_to_func(&self) -> bool {
+        if !self.is_serde_attr() {
             return false
         }
         if matches!(self.style, syn::AttrStyle::Inner(_)){
@@ -40,14 +44,13 @@ impl IAttrExt for syn::Attribute{
         let syn::Meta::List(meta_list) = &self.meta else {
             return false;
         };
-        let Ok(KeyEqualsLitStr { key, value, .. }) = meta_list.parse_args::<KeyEqualsLitStr>() else {
+        let Ok(keyval) = meta_list.parse_args::<KeyEqualsLitStr>() else {
             return false
         };
-        if key.to_string() != "try_from" {
+        if keyval.key.to_string() != "default" {
             return false
         }
-
-        return value.value() == "::serde_json::Value" || value.value() == "serde_json::Value"
+        return true
     }
 }
 
@@ -55,7 +58,7 @@ pub trait IVariantExt {
     fn partial_field_name(&self) -> syn::Ident;
     fn as_partial_field(&self) -> syn::Result<syn::Field>;
     fn tag(&self, outer_rename: Option<&SerdeOuterRenameParams>) -> syn::LitStr;
-    fn field_types(&self) -> impl Iterator<Item=&syn::Type>;
+    fn fields(&self) -> impl Iterator<Item=&syn::Field>;
 }
 
 impl IVariantExt for syn::Variant {
@@ -90,10 +93,10 @@ impl IVariantExt for syn::Variant {
                 }
             })
     }
-    fn field_types(&self) -> impl Iterator<Item=&syn::Type>{
+    fn fields(&self) -> impl Iterator<Item=&syn::Field>{
         let out: Box<dyn Iterator<Item=_>> = match &self.fields{
-            syn::Fields::Unnamed(unnamed_fields) => Box::new(unnamed_fields.unnamed.iter().map(|f| &f.ty)),
-            syn::Fields::Named(named_fields) => Box::new(named_fields.named.iter().map(|f| &f.ty)),
+            syn::Fields::Unnamed(unnamed_fields) => Box::new(unnamed_fields.unnamed.iter()),
+            syn::Fields::Named(named_fields) => Box::new(named_fields.named.iter()),
             syn::Fields::Unit => Box::new(std::iter::empty()),
         };
         out

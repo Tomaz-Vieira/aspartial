@@ -1,11 +1,9 @@
 use ::aspartial::AsPartial;
 
+#[allow(dead_code)]
 #[derive(AsPartial, serde::Serialize)]
 #[aspartial(name=PartialSomeStruct)]
-#[aspartial(attrs(
-    #[derive(::serde::Deserialize)]
-))]
-#[allow(dead_code)]
+#[derive(::serde::Deserialize)]
 struct SomeStruct {
     normal_string_field: String,
     #[serde(default = "_seven")]
