@@ -117,10 +117,13 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
             impl<#impl_generics> TryFrom<::serde_json::Value> for #partial_type_ident {
                 type Error = ::serde_json::Error;
                 fn try_from(value: ::serde_json::Value) -> Result<Self, Self::Error> {
-                    let value = value.get(#content_key).unwrap_or(value.clone());
-                    let tag = match value.get(#tag_key) {
+                    let orig_val = &value;
+                    let value = value.get(#content_key).unwrap_or(&value);
+                    let tag = match orig_val.get(#tag_key) {
                         Some(::serde_json::Value::String(tag)) => tag,
-                        _ => return Ok(#partial_from_value),
+                        _ => {
+                            return Ok(#partial_from_value)
+                        },
                     };
                     Ok(#partial_from_tag)
                 }
