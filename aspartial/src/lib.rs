@@ -97,7 +97,7 @@ impl<T: AsPartial> AsPartial for Vec<T> {
     type Partial = Vec<T::Partial>;
 }
 
-#[cfg(feature="serde_json")]
+#[cfg(feature="serde")]
 impl AsPartial for serde_json::Map<String, serde_json::Value>{
     type Partial = Self;
 }

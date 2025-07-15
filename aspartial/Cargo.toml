@@ -7,8 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [features]
-serde = ["dep:serde"]
-serde_json = ["serde", "dep:serde_json", "aspartial_derive/serde_json"]
+serde = ["dep:serde", "dep:serde_json", "aspartial_derive/serde"]
 
 [dependencies]
 aspartial_derive = { path = "../aspartial_derive" }
@@ -18,4 +17,4 @@ serde_json = { workspace = true, optional=true }
 [dev-dependencies]
 serde_json.workspace = true
 serde = { workspace = true, features = ["derive"] }
-aspartial = {path=".", features=["serde", "serde_json"]}
+aspartial = {path=".", features=["serde"]}
