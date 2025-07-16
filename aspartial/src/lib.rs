@@ -77,12 +77,23 @@ macro_rules! impl_AsPartial_as_Self { ( $type:ty ) => {
 };}
 
 impl_AsPartial_as_Self!(String);
+impl_AsPartial_as_Self!(bool);
 impl_AsPartial_as_Self!(usize);
-impl_AsPartial_as_Self!(u32);
 impl_AsPartial_as_Self!(std::num::NonZeroUsize);
+impl_AsPartial_as_Self!(u8);
+impl_AsPartial_as_Self!(i8);
+impl_AsPartial_as_Self!(u16);
+impl_AsPartial_as_Self!(i16);
+impl_AsPartial_as_Self!(u32);
+impl_AsPartial_as_Self!(i32);
+impl_AsPartial_as_Self!(u64);
+impl_AsPartial_as_Self!(i64);
+impl_AsPartial_as_Self!(u128);
+impl_AsPartial_as_Self!(i128);
 impl_AsPartial_as_Self!(f32);
 impl_AsPartial_as_Self!((f32, f32));
-impl_AsPartial_as_Self!(bool);
+impl_AsPartial_as_Self!(f64);
+impl_AsPartial_as_Self!((f64, f64));
 
 impl AsPartial for std::sync::Arc<str>{
     type Partial = String;
