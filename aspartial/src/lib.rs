@@ -112,3 +112,8 @@ impl<T: AsPartial> AsPartial for Vec<T> {
 impl AsPartial for serde_json::Map<String, serde_json::Value>{
     type Partial = Self;
 }
+
+#[cfg(feature="iso8601")]
+impl AsPartial for iso8601_timestamp::Timestamp {
+    type Partial = String;
+}
