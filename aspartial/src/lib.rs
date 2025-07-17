@@ -1,66 +1,19 @@
-/// Types that represent some type in a serialized payload can implement
-/// AsPartial to specify what that structure would look like when incomplete.
-/// 
-/// ```rust
-/// use ::aspartial::AsPartial;
-/// 
-/// // A struct like this...
-/// struct MyStruct{
-///   field1: Something,
-///   field2: String,
-/// }
-///
-/// // ...would have a 'partial' representation like this, usually generated
-/// // via #[derive(AsPartial)].
-/// struct PartialMyStruct{
-///   field1: Option<<Something as AsPartial>::Partial>,
-///   field2: Option<<String as AsPartial>::Partial>,
-/// }
-///
-/// // And an enum like this...
-/// enum MyEnum{
-///   Something(Something),
-///   SomethingElse(String),
-/// }
-///
-/// // ...would have a 'partial' representation like this, also usually
-/// // auto-generated via #[derive(AsPartial)]
-/// struct PartialMyEnum{
-///   something: Option< <Something as AsPartial>::Partial >,
-///   something_else: Option< <String as AsPartial>::Partial >,
-/// }
-///
-/// 
-/// // Note that each field type in in the original MyStruct and every variant
-/// // in the original MyEnum must also implement AsPartial:
-/// #[derive(AsPartial)]
-/// #[aspartial(name = PartialSomething)]
-/// #[aspartial(attrs(
-///     #[derive(::serde::Serialize)]
-/// ))]
-/// struct Something{
-///   a: u32
-/// }
-/// ```
-///
-///
-///
-/// that is, the partial version of an enum doesn't really know which variant
-/// it represents, (in fact, all variants could have identical fields), so it is
-/// composed of all possibilities that may or may not exist.
-///
-/// Note that [AsPartial::Partial] also implements [AsPartial], so that
-/// any arbitrarily nested field can also be missing
+#![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/README.md"))]
+
+/// A type that can have a "partial" or "incomplete" representation. These are
+/// usually serializable types, and their "partial" representations are objects
+/// with missing fields in some serialized format like JSON.
 pub trait AsPartial{
     type Partial: AsPartial;
 }
 
 pub use ::aspartial_derive::AsPartial;
 
-/// Partial types are mostly useful in the context of (de)serialization, to be able
+/// Partial types are mostly useful in the context of deserialization, to be able
 /// to handle incomplete data in self-describing formats (e.g. JSON, YAML).
-/// For convenience, the AsSerializablePartial is blanket-implemented for all types
-/// that implement `AsPartial` and whose partial version is also serializable
+/// For convenience, the [AsSerializablePartial] trait is blanket-implemented
+/// for all types that implement [AsPartial] and whose partial version is also
+/// serializable
 #[cfg(feature = "serde")]
 pub trait AsSerializablePartial: AsPartial<Partial: serde::Serialize + serde::de::DeserializeOwned>
 {}

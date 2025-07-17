@@ -40,7 +40,7 @@ impl syn::parse::Parse for Config {
         }
         Err(syn::Error::new(
             ident.span(),
-            format!("Unrecognized AsPartial config. Expected 'name', 'attrs' or 'derive', found {ident}")
+            format!("Unrecognized AsPartial config. Expected 'name' or 'attrs', found {ident}")
         ))
     }
 }

@@ -1,5 +1,3 @@
-#![allow(incomplete_features)]
-// #![feature(proc_macro_diagnostic, adt_const_params)]
 #![allow(non_snake_case)]
 
 use proc_macro::TokenStream;
@@ -10,9 +8,7 @@ mod serde_attributes;
 mod derive_config;
 mod util;
 
-////////////////////////////////////////////
-
-/// Generates a 'partial' version of the annotated type and implenets AsPartial
+/// Generates a 'partial' version of the annotated type and implements `::aspartial::AsPartial`
 /// for the annotated type.
 ///
 /// # Attributes
