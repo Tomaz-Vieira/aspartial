@@ -41,7 +41,7 @@ struct Something{
 }
 ```
 
-Note that [AsPartial::Partial] also implements [AsPartial], so that
+Note that `AsPartial::Partial` also implements `AsPartial`, so that
 any arbitrarily nested field can also be missing. This crate should provide
 implementations for all primitive types
 
