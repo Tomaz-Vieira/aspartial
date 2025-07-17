@@ -1,4 +1,4 @@
-#![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/README.md"))]
+#![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../README.md"))]
 
 /// A type that can have a "partial" or "incomplete" representation. These are
 /// usually serializable types, and their "partial" representations are objects
