@@ -1,7 +1,7 @@
 # aspartial
 
 Types that represent some type in a serialized payload can implement
-[AsPartial] to specify what that structure would look like when incomplete.
+`AsPartial` to specify what that structure would look like when incomplete.
 
 ```rust
 use ::aspartial::AsPartial;
