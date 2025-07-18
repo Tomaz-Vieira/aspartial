@@ -17,7 +17,7 @@ fn main(){
     let TomlVal::String(ref aspartial_derive_ver) = aspartial_derive_dep["version"] else {
         panic!("expected versoin to be string")
     };
-    if workspace_ver != aspartial_derive_ver {
+    if workspace_ver != *aspartial_derive_ver {
         let message = format!(
             "Crate aspartial ({workspace_ver}) has different version number from aspartial_derive({aspartial_derive_ver})"
         );
