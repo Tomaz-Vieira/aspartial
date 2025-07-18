@@ -8,6 +8,8 @@ authors = ["Tomaz Vieira<tom.fogaca@gmail.com>"]
 edition = "2024"
 rust-version="1.88"
 license = "MIT"
+homepage = "https://github.com/Tomaz-Vieira/aspartial"
+repository = "https://github.com/Tomaz-Vieira/aspartial"
 
 [workspace.dependencies]
 serde = "1.0.210"

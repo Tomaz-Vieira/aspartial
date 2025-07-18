@@ -1,10 +1,14 @@
 [package]
 name = "aspartial"
+description = "Typescript-like 'partial' types"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords = ["partial", "codegen"]
 
 [features]
 serde = ["dep:serde", "dep:serde_json", "aspartial_derive/serde"]
