@@ -1,3 +1,4 @@
+use quote::format_ident;
 use syn::{parse_quote, spanned::Spanned};
 
 use crate::{serde_attributes::{SerdeInnerRenameParams, SerdeOuterRenameParams}, util::KeyEqualsLitStr};
@@ -6,7 +7,34 @@ pub trait IAttrExt{
     fn is_serde_attr(&self) -> bool;
     fn is_serde_any_default(&self) -> bool;
     fn is_serde_regular_default(&self) -> bool;
-    fn is_serde_default_to_func(&self) -> bool;
+    fn as_serde_default_func_path(&self) -> Option<syn::Path>;
+    fn is_serde_default_to_func(&self) -> bool {
+        self.as_serde_default_func_path().is_some()
+    }
+}
+
+pub trait IFieldExt {
+    fn partial_is_optional(&self) -> bool;
+    fn is_serde_default(&self) -> bool;
+    fn partial_type(&self) -> syn::Type;
+}
+impl IFieldExt for syn::Field{
+    fn partial_is_optional(&self) -> bool{
+        !self.is_serde_default()
+    }
+    fn is_serde_default(&self) -> bool{
+        self.attrs.iter().any(|attr| attr.is_serde_any_default())
+    }
+    fn partial_type(&self) -> syn::Type {
+        let field_ty = &self.ty;
+        let partial_type: syn:: Type = parse_quote!(<#field_ty as ::aspartial::AsPartial>::Partial);
+
+        if self.is_serde_default() {
+            partial_type
+        } else {
+            parse_quote!(Option< #partial_type >)
+        }
+    }
 }
 
 impl IAttrExt for syn::Attribute{
@@ -34,23 +62,23 @@ impl IAttrExt for syn::Attribute{
         };
         return default_token.to_string() == "default"
     }
-    fn is_serde_default_to_func(&self) -> bool {
+    fn as_serde_default_func_path(&self) -> Option<syn::Path> {
         if !self.is_serde_attr() {
-            return false
+            return None
         }
         if matches!(self.style, syn::AttrStyle::Inner(_)){
-            return false;
+            return None;
         }
         let syn::Meta::List(meta_list) = &self.meta else {
-            return false;
+            return None;
         };
         let Ok(keyval) = meta_list.parse_args::<KeyEqualsLitStr>() else {
-            return false
+            return None
         };
         if keyval.key.to_string() != "default" {
-            return false
+            return None
         }
-        return true
+        keyval.value.parse().ok()
     }
 }
 

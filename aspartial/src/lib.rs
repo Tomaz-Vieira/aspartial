@@ -5,6 +5,8 @@
 /// with missing fields in some serialized format like JSON.
 pub trait AsPartial{
     type Partial: AsPartial;
+
+    fn to_partial(self) -> Self::Partial;
 }
 
 pub use ::aspartial_derive::AsPartial;
@@ -26,6 +28,10 @@ where T: AsPartial<Partial: serde::Serialize + serde::de::DeserializeOwned>
 macro_rules! impl_AsPartial_as_Self { ( $type:ty ) => {
     impl AsPartial for $type{
         type Partial = Self;
+
+        fn to_partial(self) -> Self::Partial {
+            self
+        }
     }
 };}
 
@@ -50,23 +56,41 @@ impl_AsPartial_as_Self!((f64, f64));
 
 impl AsPartial for std::sync::Arc<str>{
     type Partial = String;
+
+    fn to_partial(self) -> Self::Partial {
+        self.as_ref().to_owned()
+    }
 }
 
 //FIXME: T::Partial and not Option<T::Partial>??
 impl<T: AsPartial> AsPartial for Option<T>{
-    type Partial = T::Partial;
+    type Partial = Option<T::Partial>;
+
+    fn to_partial(self) -> Self::Partial {
+        self.map(|val| val.to_partial())
+    }
 }
 
 impl<T: AsPartial> AsPartial for Vec<T> {
     type Partial = Vec<T::Partial>;
+
+    fn to_partial(self) -> Self::Partial {
+        self.into_iter().map(|v| v.to_partial()).collect()
+    }
 }
 
 #[cfg(feature="serde")]
 impl AsPartial for serde_json::Map<String, serde_json::Value>{
     type Partial = Self;
+    fn to_partial(self) -> Self::Partial {
+        self
+    }
 }
 
 #[cfg(feature="iso8601")]
 impl AsPartial for iso8601_timestamp::Timestamp {
     type Partial = String;
+    fn to_partial(self) -> Self::Partial {
+        self.to_string()
+    }
 }

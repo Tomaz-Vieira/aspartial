@@ -1,10 +1,10 @@
 use proc_macro2::Span;
-use quote::quote;
+use quote::{format_ident, quote, ToTokens};
 use syn::{parse_quote, parse_quote_spanned, spanned::Spanned};
 use proc_macro::TokenStream;
 
 use crate::derive_config::ConfigsForAsPartial;
-use crate::syn_extensions::{IAttrExt, IEnumExt, IVariantExt};
+use crate::syn_extensions::{IAttrExt, IEnumExt, IFieldExt, IVariantExt};
 use crate::serde_attributes::SerdeEnumTagParams;
 
 fn where_clause_for_partial<'field>(
@@ -49,10 +49,11 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
 
     let enum_tag_style = SerdeEnumTagParams::from_attributes(&input.attrs);
 
+    let partial_type_ident = &confs.partial_type_ident;
     let (partial_struct_field_idents, variant_tags): (Vec<syn::Ident>, Vec<syn::LitStr>) = input.tagged_variants()
         .map(|(tag, v)| (v.partial_field_name(), tag))
         .unzip();
-    let empty_partial = quote!(Self{
+    let empty_partial = quote!(#partial_type_ident{
         #(#partial_struct_field_idents: None),*
     });
     let partial_from_value = quote!(Self{
@@ -80,7 +81,6 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
         }}
     };
 
-    let partial_type_ident = &confs.partial_type_ident;
     let partial_type_attrs = confs.attrs;
     let partial_struct_fields: Vec<syn::Field> = input.variants.iter()
         .map(|v| v.as_partial_field())
@@ -144,17 +144,55 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
         #[serde(try_from="::serde_json::Value")]
     ));
 
+
+    for variant in input.variants.iter() {
+        if variant.fields.len() > 1 {
+            return Err(syn::Error::new(variant.fields.span(), "Only single, unnamed fields supported in variants for now"))
+        }
+    }
+    let fn__to_partial: syn::ItemFn = {
+        let match_arms: Vec<_> = input.variants.iter()
+            .enumerate()
+            .map(|(variant_idx, variant)| {
+                let variant_ident = &variant.ident;
+                let destructure_ident = format_ident!("variant_{variant_idx}");
+                let partial_field_name = variant.partial_field_name();
+
+                quote!{
+                    Self::#variant_ident(#destructure_ident) => {
+                        #partial_type_ident {
+                            #partial_field_name: Some(#destructure_ident.to_partial()),
+                            ..empty
+                        }
+                    }
+                }
+            })
+            .collect();
+        parse_quote!(
+            fn to_partial(self) -> Self::Partial {
+                let empty = #empty_partial;
+                match self {
+                    #(#match_arms),*
+                }
+            }
+        )
+    };
+
     let expanded = quote!{
         impl #impl_generics ::aspartial::AsPartial for #enum_ident #ty_generics
             #where_clause
         {
             type Partial = #partial_type_ident #impl_generics;
+           #fn__to_partial
         }
 
         impl #impl_generics ::aspartial::AsPartial for #partial_type_ident #ty_generics
             #where_clause
         {
             type Partial = #partial_type_ident #impl_generics;
+            fn to_partial(self) -> Self::Partial {
+                self
+            }
         }
 
         #partial_derive_deserialize
@@ -179,6 +217,7 @@ pub fn make_partial_struct(input: &syn::ItemStruct) -> syn::Result<TokenStream>{
         input.fields.iter()
     );
 
+    let mut default_functions = Vec::<syn::ItemFn>::new();
     let partial_struct = {
         let mut partial_struct = input.clone();
         partial_struct.ident = confs.partial_type_ident;
@@ -189,40 +228,96 @@ pub fn make_partial_struct(input: &syn::ItemStruct) -> syn::Result<TokenStream>{
         }
         partial_struct.generics.where_clause = Some(where_clause.clone());
 
-        for field in partial_struct.fields.iter_mut() {
+        for (field_idx, field) in partial_struct.fields.iter_mut().enumerate() {
             field.vis = parse_quote!(pub);
-            if cfg!(feature="serde") {
-                field.attrs.retain(|attr| attr.is_serde_attr());
-                let is_default_field = field.attrs.iter().any(|attr| attr.is_serde_any_default());
-                if !is_default_field{ //fields with #[serde(default)] don't need to have type Option<_>
-                    let field_ty = &field.ty;
-                    field.attrs.push(parse_quote!(#[serde(default)]));
-                    field.ty = parse_quote!(Option< <#field_ty as ::aspartial::AsPartial>::Partial >);
-                }
-            } else {
+            field.ty = field.partial_type();
+            if ! cfg!(feature="serde") {
                 field.attrs = vec![];
-                let field_ty = &field.ty;
-                field.ty = parse_quote!(Option< <#field_ty as ::aspartial::AsPartial>::Partial >);
+                continue;
             }
+            let mut fixed_attrs = Vec::<syn::Attribute>::new();
+            for attr in &field.attrs {
+                if !attr.is_serde_attr(){
+                    continue;
+                }
+                let Some(default_path) = attr.as_serde_default_func_path() else {
+                    fixed_attrs.push(attr.clone());
+                    continue;
+                };
+                let default_func_name = {
+                    let field_ident = field.ident.as_ref().map(|ident| ident.to_string()).unwrap_or(field_idx.to_string());
+                    format_ident!("__default_for__{}__{}", partial_struct.ident, field_ident)
+                };
+                default_functions.push({
+                    let field_ty = &field.ty;
+                    parse_quote!{
+                        #[allow(non_snake_case)]
+                        fn #default_func_name() -> #field_ty {
+                            ::aspartial::AsPartial::to_partial(#default_path())
+                        }
+                    }
+                });
+                fixed_attrs.push({
+                    let serde_default_arg = syn::LitStr::new(&default_func_name.to_string(), field.span());
+                    parse_quote!(
+                        #[serde(default=#serde_default_arg)]
+                    )
+                });
+            }
+            field.attrs = fixed_attrs;
         }
         partial_struct
     };
+
     let struct_name = &input.ident;
     let partial_struct_name = &partial_struct.ident;
+
+    let fn__to_partial: syn::ItemFn = {
+        let field_inits = input.fields.iter()
+            .enumerate()
+            .map(|(field_idx, field)|{
+                let field_ident: proc_macro2::TokenStream = match field.ident.clone(){
+                    Some(ident) => ident.to_token_stream(),
+                    None => {
+                        syn::LitInt::new(&field_idx.to_string(), field.span()).to_token_stream()
+                    },
+                };
+                if field.partial_is_optional() {
+                    quote!{#field_ident : Some(self.#field_ident.to_partial())}
+                } else {
+                    quote!{#field_ident : self.#field_ident.to_partial()}
+                }
+            })
+            .collect::<Vec<_>>();
+        parse_quote!(
+            fn to_partial(self) -> Self::Partial {
+                #partial_struct_name {
+                    #(#field_inits),*
+                }
+            }
+        )
+    };
+
     let expanded = quote! {
         impl #impl_generics ::aspartial::AsPartial for #struct_name #ty_generics
             #where_clause
         {
             type Partial = #partial_struct_name #impl_generics;
+            #fn__to_partial
         }
 
         impl #impl_generics ::aspartial::AsPartial for #partial_struct_name #ty_generics
             #where_clause
         {
             type Partial = Self;
+            fn to_partial(self) -> Self::Partial {
+                self
+            }
         }
 
         #partial_struct
+
+        #(#default_functions)*
     };
     Ok(proc_macro::TokenStream::from(expanded))
 }
