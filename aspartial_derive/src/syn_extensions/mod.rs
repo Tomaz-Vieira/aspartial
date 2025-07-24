@@ -1,4 +1,3 @@
-use quote::format_ident;
 use syn::{parse_quote, spanned::Spanned};
 
 use crate::{serde_attributes::{SerdeInnerRenameParams, SerdeOuterRenameParams}, util::KeyEqualsLitStr};

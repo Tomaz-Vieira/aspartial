@@ -16,11 +16,9 @@ pub use ::aspartial_derive::AsPartial;
 /// For convenience, the [AsSerializablePartial] trait is blanket-implemented
 /// for all types that implement [AsPartial] and whose partial version is also
 /// serializable
-#[cfg(feature = "serde")]
 pub trait AsSerializablePartial: AsPartial<Partial: serde::Serialize + serde::de::DeserializeOwned>
 {}
 
-#[cfg(feature = "serde")]
 impl<T> AsSerializablePartial for T
 where T: AsPartial<Partial: serde::Serialize + serde::de::DeserializeOwned>
 {}
@@ -79,7 +77,6 @@ impl<T: AsPartial> AsPartial for Vec<T> {
     }
 }
 
-#[cfg(feature="serde")]
 impl AsPartial for serde_json::Map<String, serde_json::Value>{
     type Partial = Self;
     fn to_partial(self) -> Self::Partial {
