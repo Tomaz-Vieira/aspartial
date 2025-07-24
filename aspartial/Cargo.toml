@@ -14,7 +14,7 @@ keywords = ["partial", "codegen"]
 iso8601 = ["dep:iso8601-timestamp"]
 
 [dependencies]
-aspartial_derive = { path = "../aspartial_derive", version = "0.0.1" }
+aspartial_derive = { path = "../aspartial_derive", version = "0.0.2" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 iso8601-timestamp = { version = "0.2.17", optional = true }
