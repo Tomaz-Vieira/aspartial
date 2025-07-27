@@ -3,7 +3,7 @@ use quote::{format_ident, quote, ToTokens};
 use syn::{parse_quote, parse_quote_spanned, spanned::Spanned};
 use proc_macro::TokenStream;
 
-use crate::derive_config::ConfigsForAsPartial;
+use crate::derive_config::{ConfigsForAsPartial, ModeConfig};
 use crate::syn_extensions::{IAttrExt, IEnumExt, IFieldExt, IVariantExt};
 use crate::serde_attributes::SerdeEnumTagParams;
 
@@ -48,7 +48,12 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
 
     let enum_tag_style = SerdeEnumTagParams::from_attributes(&input.attrs);
 
-    let partial_type_ident = &confs.partial_type_ident;
+    let partial_type_ident = match confs.mode{
+        ModeConfig::Name(conf) => conf.ident,
+        ModeConfig::PartialIsInner(conf) => return Err(
+            syn::Error::new(conf.partial_is_inner_keyword.span(), "Using inner as partial is only valid for newtype structs")
+        )
+    };
     let (partial_struct_field_idents, variant_tags): (Vec<syn::Ident>, Vec<syn::LitStr>) = input.tagged_variants()
         .map(|(tag, v)| (v.partial_field_name(), tag))
         .unzip();
@@ -209,16 +214,45 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
 pub fn make_partial_struct(input: &syn::ItemStruct) -> syn::Result<TokenStream>{
     let confs = ConfigsForAsPartial::from_attrs(&input.attrs)?;
 
+    let struct_name = &input.ident;
     let (impl_generics, ty_generics, _) = input.generics.split_for_impl();
     let where_clause = where_clause_for_partial(
         input.generics.where_clause.clone(),
         input.fields.iter()
     );
 
+    let partial_struct_ident = match confs.mode {
+        ModeConfig::Name(name_conf) => name_conf.ident,
+        ModeConfig::PartialIsInner(_) => {
+            let mut fields = input.fields.iter();
+            let Some(field) = fields.next() else {
+                return Err(syn::Error::new(input.ident.span(), "aspartial(newtype): Newtype structs must have exactly one field"))
+            };
+            if let Some(unexpected_field) = fields.next() {
+                return Err(syn::Error::new(unexpected_field.span(), "aspartial(newtype): Newtype structs can only have a single field"))
+            }
+            if field.is_serde_default() {
+                return Err(syn::Error::new(field.span(), "Deriving as newtype would lose serde default"))
+            }
+            let field_ty = &field.ty;
+
+            return Ok(quote!(
+                impl #impl_generics ::aspartial::AsPartial for #struct_name #ty_generics
+                    #where_clause
+                {
+                    type Partial = <#field_ty as ::aspartial::AsPartial>::Partial;
+                    fn to_partial(self) -> Self::Partial {
+                        self.0.to_partial()
+                    }
+                }
+            ).into())
+        }
+    };
+
     let mut default_functions = Vec::<syn::ItemFn>::new();
     let partial_struct = {
         let mut partial_struct = input.clone();
-        partial_struct.ident = confs.partial_type_ident;
+        partial_struct.ident = partial_struct_ident;
         partial_struct.attrs = confs.attrs;
         partial_struct.attrs.push( parse_quote!( #[derive(::serde::Deserialize)] ));
         partial_struct.attrs.push( parse_quote!( #[serde(bound = "")] ));
@@ -261,7 +295,6 @@ pub fn make_partial_struct(input: &syn::ItemStruct) -> syn::Result<TokenStream>{
         partial_struct
     };
 
-    let struct_name = &input.ident;
     let partial_struct_name = &partial_struct.ident;
 
     let fn__to_partial: syn::ItemFn = {

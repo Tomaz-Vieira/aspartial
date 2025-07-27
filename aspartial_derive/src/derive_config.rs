@@ -7,6 +7,10 @@ pub struct NameConfig {
     pub ident: syn::Ident,
 }
 
+pub struct PartialIsInnerConfig{
+    pub partial_is_inner_keyword: syn::Ident,
+}
+
 pub struct AttrsConfig {
     #[allow(dead_code)]
     pub attrs_key: syn::Ident,
@@ -15,44 +19,100 @@ pub struct AttrsConfig {
     pub attrs: Vec<syn::Attribute>
 }
 
-pub enum Config{
+pub enum ModeConfig {
+    /// Determines the name of the generated partial type
     Name(NameConfig),
+    /// Use inner type in a newtype-like struct as the partial type
+    PartialIsInner(PartialIsInnerConfig),
+}
+
+impl From<NameConfig> for ModeConfig {
+    fn from(value: NameConfig) -> Self {
+        Self::Name(value)
+    }
+}
+
+impl From<PartialIsInnerConfig> for ModeConfig {
+    fn from(value: PartialIsInnerConfig) -> Self {
+        Self::PartialIsInner(value)
+    }
+}
+
+//////////////////////////////
+
+pub enum Config{
+    /// Determines the name of the generated partial type
+    Name(NameConfig),
+    /// Use inner type in a newtype-like struct as the partial type
+    PartialIsInner(PartialIsInnerConfig),
+    /// Add the attributes to the generated type
     Attrs(AttrsConfig),
 }
+
+impl From<ModeConfig> for Config {
+    fn from(value: ModeConfig) -> Self {
+        match value{
+            ModeConfig::Name(conf) => Self::Name(conf),
+            ModeConfig::PartialIsInner(conf) => Self::PartialIsInner(conf),
+        }
+    }
+}
+impl From<NameConfig> for Config {
+    fn from(value: NameConfig) -> Self {
+        Self::Name(value)
+    }
+}
+impl From<PartialIsInnerConfig> for Config {
+    fn from(value: PartialIsInnerConfig) -> Self {
+        Self::PartialIsInner(value)
+    }
+}
+impl From<AttrsConfig> for Config {
+    fn from(value: AttrsConfig) -> Self {
+        Self::Attrs(value)
+    }
+}
+
+///////////////////////////////
 
 impl syn::parse::Parse for Config {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let ident: syn::Ident = input.parse()?;
-        if ident.to_string() == "name" {
-            return Ok(Self::Name(NameConfig {
+        match ident.to_string().as_str() {
+            "name" =>  Ok(NameConfig {
                 partial_type_key: ident,
                 equals_sign: input.parse()?,
                 ident: input.parse()?,
-            }))
+            }.into()),
+            "attrs" => {
+                let attrs_content;
+                return Ok(AttrsConfig{
+                    attrs_key: ident,
+                    opening_paren: syn::parenthesized!(attrs_content in input),
+                    attrs: attrs_content.call(syn::Attribute::parse_outer)?,
+                }.into())
+            },
+            "newtype" => Ok(PartialIsInnerConfig{partial_is_inner_keyword: ident}.into()),
+            _ => Err(syn::Error::new(
+                ident.span(),
+                format!("Unrecognized AsPartial config. Expected 'name', 'newtype' or 'attrs', found '{ident}'")
+            ))
         }
-        if ident.to_string() == "attrs" {
-            let attrs_content;
-            return Ok(Self::Attrs(AttrsConfig{
-                attrs_key: ident,
-                opening_paren: syn::parenthesized!(attrs_content in input),
-                attrs: attrs_content.call(syn::Attribute::parse_outer)?,
-            }))
-        }
-        Err(syn::Error::new(
-            ident.span(),
-            format!("Unrecognized AsPartial config. Expected 'name' or 'attrs', found {ident}")
-        ))
     }
 }
 
+///////////////////////////////
+
 pub struct ConfigsForAsPartial {
-    pub partial_type_ident: syn::Ident,
+    pub mode: ModeConfig,
     pub attrs: Vec<syn::Attribute>,
 }
 
 impl ConfigsForAsPartial {
     pub fn from_attrs(attrs: &[syn::Attribute]) -> syn::Result<Self> {
-        let mut name_config: syn::Result<NameConfig> = Err(syn::Error::new(Span::call_site(), "no partial name set"));
+        let mut mode: syn::Result<ModeConfig> = Err(
+            syn::Error::new(Span::call_site(), "must specify name or newtype mode")
+        );
         let mut attrs_for_partial_config = Vec::<syn::Attribute>::new();
 
         for attr in attrs {
@@ -63,11 +123,17 @@ impl ConfigsForAsPartial {
                 continue
             };
             match meta_list.parse_args::<Config>()? {
-                Config::Name(new_name_conf) => {
-                    if name_config.is_ok() {
-                        return Err(syn::Error::new(new_name_conf.partial_type_key.span(), "Setting partial name again"))
+                Config::Name(conf) => {
+                    let span = conf.partial_type_key.span();
+                    if let Ok(_) = std::mem::replace(&mut mode, Ok(conf.into())) {
+                        return Err(syn::Error::new(span, "Setting mode again"))
                     }
-                    name_config = Ok(new_name_conf);
+                },
+                Config::PartialIsInner(conf) => {
+                    let span = conf.partial_is_inner_keyword.span();
+                    if let Ok(_) = std::mem::replace(&mut mode, Ok(conf.into())) {
+                        return Err(syn::Error::new(span, "Setting mode again"))
+                    }
                 },
                 Config::Attrs(new_attrs_conf) => {
                     attrs_for_partial_config.extend(new_attrs_conf.attrs);
@@ -76,7 +142,7 @@ impl ConfigsForAsPartial {
         }
 
         Ok(Self{
-            partial_type_ident: name_config?.ident,
+            mode: mode?,
             attrs: attrs_for_partial_config,
         })
     }
