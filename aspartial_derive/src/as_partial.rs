@@ -51,7 +51,7 @@ pub fn make_partial_enum(input: &syn::ItemEnum) -> syn::Result<TokenStream>{
     let partial_type_ident = match confs.mode{
         ModeConfig::Name(conf) => conf.ident,
         ModeConfig::PartialIsInner(conf) => return Err(
-            syn::Error::new(conf.partial_is_inner_keyword.span(), "Using inner as partial is only valid for newtype structs")
+            syn::Error::new(conf.partial_is_inner_keyword.span(), "'newtype' is only valid for structs")
         )
     };
     let (partial_struct_field_idents, variant_tags): (Vec<syn::Ident>, Vec<syn::LitStr>) = input.tagged_variants()

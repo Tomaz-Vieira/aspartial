@@ -13,7 +13,11 @@ mod util;
 ///
 /// # Attributes
 /// ## `aspartial(name = MyPartial)`
-/// Required. Determines the name of the generated partial type.
+/// Determines the name of the generated partial type. Required if 'newtype' is not specified.
+///
+/// ## `aspartial(newtype)`
+/// Derive `::aspartial::AsPartial` setting the associated type `Partial` to be the same type
+/// as the only field in this struct. Required if 'name' is not specified.
 ///
 /// ## `aspartial(attrs(#[some_attr1] #[some_attr2]))`
 /// Optional. Appends the specified attributes to the generated partial struct
