@@ -105,7 +105,7 @@ impl IVariantExt for syn::Variant {
         let field_type: syn::Type = parse_quote!{
             Option<  <#unnamed_fields as ::aspartial::AsPartial>::Partial  >
         };
-        Ok(parse_quote!(#ident : #field_type))
+        Ok(parse_quote!(pub #ident : #field_type))
     }
 
     fn tag(&self, outer_rename: Option<&SerdeOuterRenameParams>) -> syn::LitStr {
